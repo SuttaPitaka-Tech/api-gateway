@@ -13,6 +13,10 @@ export class GatewayController {
         'role-allocation',
         this.configService.get('ROLE_ALLOCATION_SERVICE_URL', 'http://localhost:7002'),
       ],
+      [
+        'notification',
+        this.configService.get('NOTIFICATION_SERVICE_URL', 'http://localhost:7003'),
+      ],
     ]);
   }
 
@@ -37,7 +41,10 @@ export class GatewayController {
 
     // For EduWeConnect, we route /api/* to the role-allocation service by default
     // In a real environment, you might inspect originalUrl to route to different microservices.
-    const serviceName = 'role-allocation';
+    let serviceName = 'role-allocation';
+    if (originalUrl.startsWith('/api/notifications')) {
+      serviceName = 'notification';
+    }
     const targetUrl = this.serviceUrls.get(serviceName);
 
     if (!targetUrl) {
