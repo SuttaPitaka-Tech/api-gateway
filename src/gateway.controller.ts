@@ -1,11 +1,14 @@
 import { All, Controller, Get, Req, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
+import axios, { AxiosInstance } from 'axios';
+import * as http from 'http';
+import * as https from 'https';
 import type { Request, Response } from 'express';
 
 @Controller()
 export class GatewayController {
   private readonly serviceUrls: Map<string, string>;
+  private readonly proxyClient: AxiosInstance;
 
   constructor(private readonly configService: ConfigService) {
     this.serviceUrls = new Map([
@@ -18,6 +21,15 @@ export class GatewayController {
         this.configService.get('NOTIFICATION_SERVICE_URL', 'http://localhost:7003'),
       ],
     ]);
+
+    // High-performance persistent connection pooling
+    this.proxyClient = axios.create({
+      httpAgent: new http.Agent({ keepAlive: true, maxSockets: 100, keepAliveMsecs: 10000 }),
+      httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 100, keepAliveMsecs: 10000 }),
+      timeout: 30000,
+      validateStatus: () => true,
+      responseType: 'arraybuffer',
+    });
   }
 
   @Get('health')
@@ -26,12 +38,14 @@ export class GatewayController {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       services: {
-        gateway: 'healthy'
-      }
+        gateway: 'healthy',
+        roleAllocation: this.serviceUrls.get('role-allocation'),
+        notification: this.serviceUrls.get('notification'),
+      },
     };
   }
 
-  @All('api/*')
+  @All('*')
   async handleApiRequest(
     @Req() request: Request,
     @Res({ passthrough: false }) res: Response,
@@ -39,10 +53,14 @@ export class GatewayController {
     const originalUrl = request.url;
     const method = request.method;
 
-    // For EduWeConnect, we route /api/* to the role-allocation service by default
-    // In a real environment, you might inspect originalUrl to route to different microservices.
+    // Direct health check bypass
+    if (originalUrl === '/health' || originalUrl === '/health/') {
+      return res.json(await this.getHealth());
+    }
+
+    // Determine target service
     let serviceName = 'role-allocation';
-    if (originalUrl.startsWith('/api/notifications')) {
+    if (originalUrl.startsWith('/api/notifications') || originalUrl.startsWith('/notifications')) {
       serviceName = 'notification';
     }
     const targetUrl = this.serviceUrls.get(serviceName);
@@ -55,9 +73,6 @@ export class GatewayController {
       });
     }
 
-    // Determine target path (e.g. forward everything after /api/)
-    // Depending on the microservice, you might keep /api or strip it.
-    // For now, let's keep the exact path so it proxies exactly.
     const url = `${targetUrl}${originalUrl}`;
 
     try {
@@ -65,23 +80,26 @@ export class GatewayController {
         method,
         url,
         headers: { ...request.headers },
-        responseType: 'arraybuffer',
-        validateStatus: () => true, // resolve all statuses
       };
 
-      // Strip host header so axios sets the correct one
+      // Strip host and connection headers so the proxy client sets the correct ones
       delete config.headers['host'];
       delete config.headers['connection'];
 
       if (['POST', 'PUT', 'PATCH'].includes(method)) {
-        if (request.body && Object.keys(request.body).length > 0) {
+        const contentType = (request.headers['content-type'] || '').toString();
+        if (contentType.includes('multipart/form-data')) {
+          config.data = request;
+          config.maxBodyLength = Infinity;
+          config.maxContentLength = Infinity;
+        } else if (request.body !== undefined && request.body !== null) {
           config.data = request.body;
         }
       }
 
-      const response = await axios(config);
-      
-      // Filter out problematic headers
+      const response = await this.proxyClient.request(config);
+
+      // Filter out problematic hop-by-hop headers
       const headersToOmit = ['transfer-encoding', 'connection'];
       for (const [key, value] of Object.entries(response.headers)) {
         if (!headersToOmit.includes(key.toLowerCase()) && value !== undefined) {
