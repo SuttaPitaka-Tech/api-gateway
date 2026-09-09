@@ -99,8 +99,16 @@ export class GatewayController {
 
       const response = await this.proxyClient.request(config);
 
-      // Filter out problematic hop-by-hop headers
-      const headersToOmit = ['transfer-encoding', 'connection'];
+      // Filter out problematic hop-by-hop and downstream CORS headers
+      const headersToOmit = [
+        'transfer-encoding',
+        'connection',
+        'access-control-allow-origin',
+        'access-control-allow-credentials',
+        'access-control-allow-methods',
+        'access-control-allow-headers',
+        'access-control-expose-headers',
+      ];
       for (const [key, value] of Object.entries(response.headers)) {
         if (!headersToOmit.includes(key.toLowerCase()) && value !== undefined) {
           res.setHeader(key, value as string | string[]);
