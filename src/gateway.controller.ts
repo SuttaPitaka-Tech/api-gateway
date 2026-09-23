@@ -60,7 +60,12 @@ export class GatewayController {
 
     // Determine target service
     let serviceName = 'role-allocation';
-    if (originalUrl.startsWith('/api/notifications') || originalUrl.startsWith('/notifications')) {
+    if (
+      originalUrl.startsWith('/api/notifications') ||
+      originalUrl.startsWith('/notifications') ||
+      originalUrl.startsWith('/api/chat') ||
+      originalUrl.startsWith('/chat')
+    ) {
       serviceName = 'notification';
     }
     const targetUrl = this.serviceUrls.get(serviceName);
