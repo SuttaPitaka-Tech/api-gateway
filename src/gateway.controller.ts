@@ -66,7 +66,9 @@ export class GatewayController {
       originalUrl.startsWith('/api/chat') ||
       originalUrl.startsWith('/chat') ||
       originalUrl.startsWith('/api/calls') ||
-      originalUrl.startsWith('/calls')
+      originalUrl.startsWith('/calls') ||
+      originalUrl.startsWith('/api/meetings') ||
+      originalUrl.startsWith('/meetings')
     ) {
       serviceName = 'notification';
     }
