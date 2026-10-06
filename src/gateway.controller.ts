@@ -94,6 +94,7 @@ export class GatewayController {
       // Strip host and connection headers so the proxy client sets the correct ones
       delete config.headers['host'];
       delete config.headers['connection'];
+      delete config.headers['content-length'];
 
       if (['POST', 'PUT', 'PATCH'].includes(method)) {
         const contentType = (request.headers['content-type'] || '').toString();
@@ -102,6 +103,7 @@ export class GatewayController {
           config.maxBodyLength = Infinity;
           config.maxContentLength = Infinity;
         } else if (request.body !== undefined && request.body !== null) {
+          console.log(`[Gateway] Forwarding POST to ${url} with body:`, request.body);
           config.data = request.body;
         }
       }
