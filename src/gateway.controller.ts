@@ -20,6 +20,10 @@ export class GatewayController {
         'notification',
         this.configService.get('NOTIFICATION_SERVICE_URL', 'http://localhost:7003'),
       ],
+      [
+        'attendance',
+        this.configService.get('ATTENDANCE_SERVICE_URL', 'http://localhost:7004'),
+      ],
     ]);
 
     // High-performance persistent connection pooling
@@ -41,6 +45,7 @@ export class GatewayController {
         gateway: 'healthy',
         roleAllocation: this.serviceUrls.get('role-allocation'),
         notification: this.serviceUrls.get('notification'),
+        attendance: this.serviceUrls.get('attendance'),
       },
     };
   }
@@ -61,6 +66,11 @@ export class GatewayController {
     // Determine target service
     let serviceName = 'role-allocation';
     if (
+      originalUrl.startsWith('/api/attendance') ||
+      originalUrl.startsWith('/attendance')
+    ) {
+      serviceName = 'attendance';
+    } else if (
       originalUrl.startsWith('/api/notifications') ||
       originalUrl.startsWith('/notifications') ||
       originalUrl.startsWith('/api/chat') ||
